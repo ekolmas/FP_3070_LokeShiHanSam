@@ -1,0 +1,14 @@
+{
+  "name": "fyp-prototype",
+  "version": "1.0.0",
+  "description": "This is the prototype for FP CM3070 by Loke Shi Han Sam",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Loke Shi Han Sam",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^5.2.1"
+  }
+}
