@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Podcast Prototype</title>
+    <style>
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>AI Podcast Prototype</h1>
+    <p>Click button to generate podcast</p>
+
+    <button id="generateBtn">Generate</button>
+    <div id="status"></div>
+
+    <!-- hidden playback that appears after podcast generated-->
+    <div id="playbackPanel" class="hidden">
+        <audio id="audioPlayer" controls></audio><br>
+        <a id="downloadBtn" href="#" download>Click me to download</a>
+    </div>
+</body>
+
+<script>
+    //Define all the elements
+    const generateBtn = document.getElementById("generateBtn");
+    const statusDiv = document.getElementById("status");
+    const playbackPanel = document.getElementById("playbackPanel");
+    const audioPlayer = document.getElementById("audioPlayer");
+    const downloadBtn = document.getElementById("downloadBtn");
+
+    //evenet listener for generate button
+    generateBtn.addEventListener("click", async () => {
+        // Disable the button so user can't spam
+        generateBtn.disabled = true;
+
+        //update status
+        statusDiv.innerText = "Generation in progress";
+
+        //make sure its hidden
+        playbackPanel.classList.add("hidden");
+
+        //try to generate the podcast using POST /generate
+        try {
+            const response = await fetch("/generate", { method: "POST" });
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || "Error during generation");
+            }
+
+            //Add the audio source to the player
+            // use server URLs, not file paths
+            audioPlayer.src = data.audioUrl + "?t=" + Date.now();   // cache-bust to avoid old audio
+            downloadBtn.href = data.downloadUrl;
+
+
+            playbackPanel.classList.remove("hidden");
+            statusDiv.innerText = "Generation complete";
+
+        } catch (err) {
+            statusDiv.innerText = "Error during generation: " + err.message;
+        } finally {
+            generateBtn.disabled = false;
+        }
+    });
+</script>
+
+</html>
