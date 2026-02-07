@@ -1,0 +1,5 @@
+file 'C:/Users/Sam/Desktop/FP_3070_LokeShiHanSam/final_source_code/backend/tts_output/test-article-1/segment_000_host1.wav'
+file 'C:/Users/Sam/Desktop/FP_3070_LokeShiHanSam/final_source_code/backend/tts_output/test-article-1/segment_001_host2.wav'
+file 'C:/Users/Sam/Desktop/FP_3070_LokeShiHanSam/final_source_code/backend/tts_output/test-article-1/segment_002_host1.wav'
+file 'C:/Users/Sam/Desktop/FP_3070_LokeShiHanSam/final_source_code/backend/tts_output/test-article-1/segment_003_host2.wav'
+file 'C:/Users/Sam/Desktop/FP_3070_LokeShiHanSam/final_source_code/backend/tts_output/test-article-1/segment_004_host1.wav'

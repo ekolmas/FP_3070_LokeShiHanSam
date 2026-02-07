@@ -1,0 +1,40 @@
+<%- include("layout", { title, body: ` <h1>Preferences</h1>
+    <p>Logged in as: ${username || ""}</p>
+
+    <form method="POST" action="/preferences">
+        <h2>Topics</h2>
+        <div class="options">
+            ${TOPIC_OPTIONS.map(t => `
+            <label style="display:block; margin: 6px 0;">
+                <input type="checkbox" name="topics" value="${t}" ${prefs.topics?.includes(t) ? "checked" : "" } />
+                ${t}
+            </label>
+            `).join("")}
+        </div>
+
+        <h2>Sources</h2>
+        <div class="options">
+            ${SOURCE_OPTIONS.map(s => `
+            <label style="display:block; margin: 6px 0;">
+                <input type="checkbox" name="sources" value="${s}" ${prefs.sources?.includes(s) ? "checked" : "" } />
+                ${s}
+            </label>
+            `).join("")}
+        </div>
+
+        <h2>Style</h2>
+        <div class="options">
+            ${STYLE_OPTIONS.map(st => `
+            <label style="display:block; margin: 6px 0;">
+                <input type="checkbox" name="style" value="${st}" ${prefs.style?.includes(st) ? "checked" : "" } />
+                ${st}
+            </label>
+            `).join("")}
+        </div>
+
+
+        <div style="margin-top: 16px;">
+            <button type="submit">Save</button>
+        </div>
+    </form>
+    `}) %>

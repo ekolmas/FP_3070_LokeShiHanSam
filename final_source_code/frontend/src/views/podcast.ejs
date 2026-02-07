@@ -1,0 +1,10 @@
+<%- include("layout", { title, body: ` <h1>Podcast</h1>
+    <p>Signed in as: ${email}</p>
+
+    <h3>Your preferences</h3>
+    <pre>${JSON.stringify(prefs, null, 2)}</pre>
+
+    <p>(Next step: a "Generate Podcast" button that calls the Python backend.)</p>
+
+    <p><a href="/preferences">Edit preferences</a> | <a href="/logout">Logout</a></p>
+    `}) %>

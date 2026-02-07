@@ -1,0 +1,15 @@
+<%- include("layout", { title, body: ` <h1>Sign In</h1>
+    ${error ? `<p class="error">${error}</p>` : ""}
+
+    <form method="POST" action="/auth/signin">
+        <label>Username</label>
+        <input name="username" type="text" required />
+
+        <label>Password</label>
+        <input name="password" type="password" required />
+
+        <button type="submit">Continue</button>
+    </form>
+
+    <p>Don’t have an account? <a href="/signup">Sign up</a></p>
+    `}) %>

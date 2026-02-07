@@ -1,1 +1,10 @@
 .env
+/Model Selection/TTS Audio Generation/microsoft_output
+/Model Selection/TTS Audio Generation/coqui_output
+/Model Selection/TTS Audio Generation/suno_output
+*.pyc
+*.wav
+final_source_code/frontend/node_modules/.package-lock.json
+/final_source_code/frontend/node_modules
+/final_source_code/node_modules/bcrypt
+/final_source_code/node_modules
