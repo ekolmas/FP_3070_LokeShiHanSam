@@ -16,6 +16,10 @@ DEFAULT_MODEL_ENDPOINT = os.getenv("OPENROUTER_MODEL", "z-ai/glm-4.5-air:free")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 OUTPUT_DIR = os.getenv("TTS_OUTPUT_DIR", "tts_output")
 
+os.environ["TRANSFORMERS_VERBOSITY"] = "error"
+os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
 
 # Function purpose: to read JSON input from NodeJS and convert to python dict
 # Parse stdin using json.loads, and handle any invalid JSONs
