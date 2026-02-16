@@ -1,10 +1,181 @@
 <%- include("layout", { title, body: ` <h1>Podcast</h1>
-    <p>Signed in as: ${email}</p>
+    <p>Signed in as: ${username}</p>
 
-    <h3>Your preferences</h3>
-    <pre>${JSON.stringify(prefs, null, 2)}</pre>
+    <p>
+        <a href="/preferences">Edit preferences</a> |
+        <a href="/logout">Logout</a>
+    </p>
 
-    <p>(Next step: a "Generate Podcast" button that calls the Python backend.)</p>
+    <hr />
 
-    <p><a href="/preferences">Edit preferences</a> | <a href="/logout">Logout</a></p>
+    <h2>Preloaded (Latest)</h2>
+
+    ${
+    (!preloaded || preloaded.length === 0)
+    ? `<p>No preloaded podcasts yet.</p>`
+    : preloaded.map(p => `
+    <div style="border:1px solid #ddd; padding:16px; border-radius:12px; margin-bottom:12px;">
+        <h3>${p.podcast_title || "Untitled Podcast"}</h3>
+        <small>${p.created_at || ""}</small>
+
+        ${p.image_url ? `
+        <div style="margin-top:10px;">
+            <img src="${p.image_url}" style="width:200px;border-radius:12px;" />
+        </div>
+        ` : ""}
+
+        ${p.audio_path ? `
+        <div style="margin-top:10px;">
+            <audio controls style="width:100%;" src="${p.audio_path}"></audio>
+        </div>
+        ` : `<p>(No audio_path in this record)</p>`}
+
+        <div style="margin-top:6px; font-size:14px; opacity:0.8;">
+            Generation time: ${(p.generation_time ? (p.generation_time/1000).toFixed(1) : "—")}s
+        </div>
+    </div>
+    `).join("")
+    }
+
+    <hr />
+
+    <h2>Generate New Podcast</h2>
+
+    <div style="border:1px solid #ddd; padding:16px; border-radius:12px;">
+        <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px;">
+            <div id="spinner" style="
+        width:18px; height:18px;
+        border:3px solid rgba(0,0,0,0.2);
+        border-top-color: rgba(0,0,0,0.7);
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        display:none;"></div>
+
+            <div>
+                <div id="genStatus" style="font-weight:600;">Idle</div>
+                <div style="font-size:14px; opacity:0.8;">
+                    Elapsed: <span id="elapsed">0.0</span>s
+                </div>
+            </div>
+
+            <div style="flex:1;"></div>
+            <button id="startBtn">Generate</button>
+        </div>
+
+        <ul id="liveList" style="padding-left:18px; margin:0;"></ul>
+    </div>
+
+    <style>
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+
+    <script>
+        (function () {
+            var startBtn = document.getElementById('startBtn');
+            var spinner = document.getElementById('spinner');
+            var genStatus = document.getElementById('genStatus');
+            var elapsedEl = document.getElementById('elapsed');
+            var liveList = document.getElementById('liveList');
+
+            var timer = null;
+            var t0 = 0;
+            var es = null;
+
+            function startTimer() {
+                t0 = performance.now();
+                timer = setInterval(function () {
+                    var secs = (performance.now() - t0) / 1000;
+                    elapsedEl.textContent = secs.toFixed(1);
+                }, 100);
+            }
+
+            function stopTimer() {
+                if (timer) clearInterval(timer);
+                timer = null;
+            }
+
+            function setGeneratingUI(isGenerating) {
+                spinner.style.display = isGenerating ? 'inline-block' : 'none';
+                startBtn.disabled = isGenerating;
+            }
+
+            startBtn.addEventListener('click', async function () {
+                liveList.innerHTML = '';
+                elapsedEl.textContent = '0.0';
+                genStatus.textContent = 'Starting...';
+                setGeneratingUI(true);
+                startTimer();
+
+                if (es) { es.close(); es = null; }
+
+                try {
+                    var resp = await fetch('/podcast/start', { method: 'POST' });
+                    var data = await resp.json();
+
+                    if (!data.ok) {
+                        genStatus.textContent = 'Error: ' + (data.error || 'Unknown error');
+                        setGeneratingUI(false);
+                        stopTimer();
+                        return;
+                    }
+
+                    genStatus.textContent = 'Generating...';
+
+                    es = new EventSource('/podcast/events/' + data.jobId);
+
+                    es.onmessage = function (ev) {
+                        var msg = JSON.parse(ev.data);
+
+                        if (msg.type === 'item_ready') {
+                            var item = msg.item || {};
+                            var src = item.audio_url || item.audio_path || '';
+
+                            var li = document.createElement('li');
+                            li.style.marginBottom = '10px';
+
+                            // IMPORTANT: no backticks here
+                            li.innerHTML =
+                                '<div style="font-weight:600;">' + (item.title || 'Untitled') + '</div>' +
+                                '<audio controls style="width:100%;" src="' + src + '"></audio>';
+
+                            liveList.appendChild(li);
+                        }
+
+                        if (msg.type === 'done') {
+                            genStatus.textContent = 'Done!';
+                            setGeneratingUI(false);
+                            stopTimer();
+                            es.close();
+                            es = null;
+                        }
+
+                        if (msg.type === 'error') {
+                            genStatus.textContent = 'Error: ' + (msg.error || 'Unknown error');
+                            setGeneratingUI(false);
+                            stopTimer();
+                            es.close();
+                            es = null;
+                        }
+                    };
+
+                    es.onerror = function () {
+                        genStatus.textContent = 'Connection lost.';
+                        setGeneratingUI(false);
+                        stopTimer();
+                        if (es) es.close();
+                        es = null;
+                    };
+
+                } catch (e) {
+                    genStatus.textContent = 'Error: ' + (e.message || String(e));
+                    setGeneratingUI(false);
+                    stopTimer();
+                }
+            });
+        })();
+    </script>
     `}) %>

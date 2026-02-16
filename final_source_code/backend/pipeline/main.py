@@ -21,6 +21,12 @@ os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 
+# Function purpose: to emit messages to the frontend
+def emit(obj: dict):
+    sys.stdout.write(json.dumps(obj, ensure_ascii=False) + "\n")
+    sys.stdout.flush()
+
+
 # Function purpose: to read JSON input from NodeJS and convert to python dict
 # Parse stdin using json.loads, and handle any invalid JSONs
 def _read_stdin_json():
@@ -143,6 +149,21 @@ def run_pipeline(payload):
                 "conversation": convo,  # keep it if you want to show transcript on podcast page
             }
         )
+
+        emit({"type": "item_ready", "item": results[-1]})
+
+    podcast_id = results[0]["article_id"] if results else "podcast"
+    podcast_title = results[0]["title"] if results else "Daily Podcast"
+    image_url = results[0]["image_url"] if results else None
+
+    emit(
+        {
+            "type": "done",
+            "podcast_id": podcast_id,
+            "podcast_title": podcast_title,
+            "image_url": image_url,
+        }
+    )
 
     # return the results
     return {

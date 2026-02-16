@@ -5,12 +5,17 @@ import { getDb } from "../db.js";
 
 const router = express.Router();
 
+import EventEmitter from "events";
+import { randomUUID } from "crypto";
+
+const jobs = new Map(); // jobId -> { emitter, items, done, error, startedAt, meta }
+
+
 function requireAuth(req, res, next) {
   if (!req.session.userId) return res.redirect("/");
   next();
 }
 
-// --- helper: fetch 30 articles from NewsAPI (or your source) ---
 async function fetch30Articles() {
   const apiKey = process.env.NEWSAPI_KEY;
   if (!apiKey) throw new Error("Missing NEWSAPI_KEY in .env");
@@ -37,123 +42,214 @@ async function fetch30Articles() {
   return data.articles || [];
 }
 
-// --- helper: call python main.py via stdin/stdout JSON ---
-/*"""
-    Expected payload from Node:
-    {
-      "articles": [ {newsapi-like article}, ... up to 30 ],
-      "user_pref": { "preferences": { "sources": [...], "topics": [...], "style": [...] } },
-      "model_endpoint": "z-ai/....",         # OPTIONAL
-      "top_k": 5,                            # OPTIONAL
-      "output_dir": "tts_output"             # OPTIONAL
-    }
-    """*/
-function runPythonPipeline({ articles, user_pref }) {
-  return new Promise((resolve, reject) => {
-    const pythonExe = process.env.PYTHON_EXE || "python";
+function startPythonPipelineJob({ db, articles, user_pref }) {
+  const jobId = randomUUID();
+  const emitter = new EventEmitter();
 
-    // IMPORTANT: set correct path to your python main.py
-    const scriptPath = path.join(
-      process.cwd(),
-      "../backend",
-      "pipeline",
-      "main.py"
-    );
+  jobs.set(jobId, {
+    emitter,
+    items: [],
+    done: false,
+    error: null,
+    meta: null,
+    startedAt: Date.now(),
+  });
 
-    const child = spawn(pythonExe, ["-u", scriptPath], {
-      cwd: process.cwd(),
-      env: {
-        ...process.env,
-        PYTHONUNBUFFERED: "1",
-      },
-    });
+  const pythonExe = process.env.PYTHON_EXE || "python";
+  const scriptPath = path.join(process.cwd(), "../backend", "pipeline", "main.py");
 
+  const child = spawn(pythonExe, ["-u", scriptPath], {
+    cwd: process.cwd(),
+    env: { ...process.env, PYTHONUNBUFFERED: "1" },
+  });
 
-    let stdout = "";
-    let stderr = "";
+  let buf = "";
+  let stderr = "";
 
-    child.stdout.on("data", (data) => {
-      const text = data.toString();
-      stdout += text;
-      console.log("\x1b[36m[PYTHON]\x1b[0m", text.trim());
-    });
+  child.stdout.on("data", async (chunk) => {
+    buf += chunk.toString();
 
-    child.stderr.on("data", (data) => {
-      const text = data.toString();
-      stderr += text;
-      console.error("\x1b[31m[PYTHON ERROR]\x1b[0m", text.trim());
-    });
+    const lines = buf.split("\n");
+    buf = lines.pop() || "";
 
+    for (const line of lines) {
+      const t = line.trim();
+      if (!t) continue;
 
-    child.on("error", (err) => {
-      reject(err);
-    });
-
-    child.on("close", (code) => {
-      // python prints JSON to stdout even on error
       try {
-        const parsed = JSON.parse(stdout || "{}");
-        if (code === 0 && parsed.ok) return resolve(parsed);
+        const msg = JSON.parse(t);
+        const job = jobs.get(jobId);
+        if (!job) return;
 
-        // show python error message + stderr
-        const msg = parsed.error || `Python exited with code ${code}`;
-        return reject(new Error(`${msg}\n\nPY STDERR:\n${stderr}`));
+        // If your python emits item_ready/done/error, handle them:
+        if (msg.type === "item_ready") {
+          const item = msg.item;
+
+          // Convert absolute path -> /audio/<folder>/<file>
+          if (item.audio_path && !item.audio_url) {
+            const parts = item.audio_path.split(path.sep);
+            const folder = parts[parts.length - 2];
+            const file = parts[parts.length - 1];
+            item.audio_url = `/audio/${folder}/${file}`;
+          }
+
+          job.items.push(item);
+          emitter.emit("msg", { type: "item_ready", item });
+        } else if (msg.type === "done") {
+          job.done = true;
+          job.meta = msg;
+          emitter.emit("msg", msg);
+          emitter.emit("end");
+
+          const generationMs = Date.now() - job.startedAt;
+
+          // ✅ podcast_id must match folder/file naming in TTS output
+          const podcastId = msg.podcast_id || jobId; // use jobId if python didn't send one
+
+          // ✅ public audio URL (since /audio maps to backend/tts_output)
+          const audioUrl = `/audio/${podcastId}/${podcastId}.wav`;
+
+          console.log("Podcast generated added into the db and server")
+          await db.collection("podcasts").insertOne({
+            podcast_id: podcastId,
+            created_at: new Date().toISOString().slice(0, 10), // YYYY-MM-DD
+            podcast_title: msg.podcast_title || "Daily Podcast",
+            image_url: msg.image_url || null,
+            audio_path: audioUrl,
+            generation_time: generationMs,
+          });
+
+        } else if (msg.type === "error") {
+          job.error = msg.error || "Unknown error";
+          emitter.emit("msg", { type: "error", error: job.error });
+          emitter.emit("end");
+        } else {
+          // fallback: forward anything else
+          emitter.emit("msg", msg);
+        }
       } catch (e) {
-        return reject(
-          new Error(
-            `Failed to parse python output as JSON.\n\nSTDOUT:\n${stdout}\n\nSTDERR:\n${stderr}`
-          )
-        );
+        // If python prints non-JSON logs to stdout, it will break streaming.
+        // Keep logs on stderr only.
       }
-    });
+    }
+  });
 
-    // send JSON to python stdin
-    const payload = {
+  child.stderr.on("data", (d) => {
+    stderr += d.toString();
+    console.error("[PY STDERR]", d.toString().trim());
+  });
+
+  child.on("close", (code) => {
+    const job = jobs.get(jobId);
+    if (!job) return;
+
+    // If python exits without sending done/error events
+    if (!job.done && !job.error) {
+      job.error = `Python exited with code ${code}`;
+      emitter.emit("msg", { type: "error", error: job.error, stderr });
+      emitter.emit("end");
+    }
+  });
+
+  child.stdin.write(
+    JSON.stringify({
       articles,
       user_pref,
+      top_k: 5,
       model_endpoint: process.env.OPENROUTER_MODEL || "z-ai/glm-4.5-air:free",
-    };
+      output_dir: process.env.TTS_OUTPUT_DIR || "tts_output",
+      seen_train: [],
+    })
+  );
+  child.stdin.end();
 
-    child.stdin.write(JSON.stringify(payload));
-    child.stdin.end();
-  });
+  return jobId;
 }
 
-// GET /podcast
+
+// Function purpose: render the podcast page with preloaded daily podcasts to reduce waiting time for users.
 router.get("/podcast", requireAuth, async (req, res) => {
   const db = await getDb();
-  const doc = await db
-    .collection("preferences")
-    .findOne({ user_id: req.session.userId });
 
-  // If no prefs -> redirect to /preferences
-  if (!doc || !doc.preferences) return res.redirect("/preferences");
+  // if no user preference go back to preference setting page
+  const prefDoc = await db.collection("preferences").findOne({ user_id: req.session.userId });
+  if (!prefDoc?.preferences) return res.redirect("/preferences");
 
+  // Load some latestt pre generated podcasts 
+  const latestPodcast = await db
+    .collection("podcasts")
+    .findOne({}, { sort: { created_at: -1, _id: -1 } });
+
+
+  res.render("podcast", {
+    title: "Podcast",
+    username: req.session.username,
+    preloaded: latestPodcast ? [latestPodcast] : [],
+  });
+});
+
+//Function Purpose: To start podcast generation
+router.post("/podcast/start", requireAuth, async (req, res) => {
   try {
-    // 1) get 30 articles
+    const db = await getDb();
+
+    const prefDoc = await db
+      .collection("preferences")
+      .findOne({ user_id: req.session.userId });
+
+    if (!prefDoc?.preferences) {
+      return res.status(400).json({ ok: false, error: "Preferences not set" });
+    }
+
     const articles = await fetch30Articles();
 
-    // 2) call python pipeline
-    const result = await runPythonPipeline({
+    const jobId = startPythonPipelineJob({
+      db,
       articles,
-      user_pref: { preferences: doc.preferences },
+      user_pref: { preferences: prefDoc.preferences },
     });
 
-    // 3) render
-    res.render("podcast", {
-      title: "Podcast",
-      email: req.session.email,
-      podcastTitle: result.podcast_title,
-      imageUrl: result.image_url,
-      recommended: result.recommended, // includes audio_path, title, url, etc
-    });
+    return res.json({ ok: true, jobId });
   } catch (err) {
-    console.error(err);
-    res.status(500).render("error", {
-      title: "Error",
-      message: err.message,
-    });
+    console.error("Error in /podcast/start:", err);
+    return res.status(500).json({ ok: false, error: err.message || "Failed to start" });
   }
 });
+
+router.get("/podcast/events/:jobId", requireAuth, (req, res) => {
+  const job = jobs.get(req.params.jobId);
+  if (!job) return res.status(404).end();
+
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+
+  const send = (obj) => res.write(`data: ${JSON.stringify(obj)}\n\n`);
+
+  // Send any buffered items immediately
+  for (const item of job.items) send({ type: "item_ready", item });
+
+  if (job.done) {
+    send({ type: "done", ...(job.meta || {}) });
+    return res.end();
+  }
+
+  if (job.error) {
+    send({ type: "error", error: job.error });
+    return res.end();
+  }
+
+  const onMsg = (m) => send(m);
+  const onEnd = () => res.end();
+
+  job.emitter.on("msg", onMsg);
+  job.emitter.once("end", onEnd);
+
+  req.on("close", () => {
+    job.emitter.off("msg", onMsg);
+  });
+});
+
+
 
 export default router;
