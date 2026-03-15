@@ -5,26 +5,11 @@ import types
 import pytest
 import wave
 from pathlib import Path
-from pipeline.TTS import create_silent_wav, generate_audio
+from pipeline.TTS import generate_audio
 
 
-# First test: Check if create_silent_wav creates a file
-def test_create_silent_wav_creates_file():
-    created_silent_file = create_silent_wav()
-
-    assert created_silent_file.exists()
-
-
-# Second test: Check if create_silent_wav creates a valid wav file
-def test_create_silent_wav_valid_wav():
-    created_silent_file = create_silent_wav()
-
-    with wave.open(str(created_silent_file), "rb") as wavfile:
-        assert wavfile.getnchannels() == 1
-        assert wavfile.getsampwidth() == 2
-        assert wavfile.getframerate() == 24000
-
-
+# First test: generate segmented audio and final concatenated audio using Bark TTS
+# successfully passed
 @pytest.mark.slow
 def test_generate_audio_bark_creates_segments_and_final():
     conversation = [

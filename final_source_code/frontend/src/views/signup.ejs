@@ -1,6 +1,7 @@
 <%- include("layout", { title, body: ` <h1>Sign Up</h1>
     ${error ? `<p class="error">${error}</p>` : ""}
 
+    <!-- Form that calls POST /auth/signup to create a new user -->
     <form method="POST" action="/auth/signup">
         <label>Username</label>
         <input name="username" type="text" required />

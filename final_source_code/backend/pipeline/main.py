@@ -2,37 +2,47 @@ import json
 import os
 import sys
 from pathlib import Path
+import traceback
 from dotenv import load_dotenv
 
-# removed pipeline. infront of modules for frontend to run
+# Comment the following imports if running unit tests
 from RS import fit_tfidf, recommend_tfidf
 from LLM import generate_conversation_for_article
 from TTS import generate_audio
 
+# Comment the following imports if running full system
+# from pipeline.RS import fit_tfidf, recommend_tfidf
+# from pipeline.LLM import generate_conversation_for_article
+# from pipeline.TTS import generate_audio
 
 load_dotenv()
 
+# Get env variables for model endpoint and API key
+# Set default fields in case env variables are missing
 DEFAULT_MODEL_ENDPOINT = os.getenv("OPENROUTER_MODEL", "z-ai/glm-4.5-air:free")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 OUTPUT_DIR = os.getenv("TTS_OUTPUT_DIR", "tts_output")
 
+# IMPORTANT Set variables to reduce verbosity of transformers and tokenizers that clutters the stdout output that nodejs reads
 os.environ["TRANSFORMERS_VERBOSITY"] = "error"
 os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 
-# Function purpose: to emit messages to the frontend
+# Function purpose: to emit messages to the stdout for NodeJS to read and update the UI in real time as each article is processed
 def emit(obj: dict):
     sys.stdout.write(json.dumps(obj, ensure_ascii=False) + "\n")
     sys.stdout.flush()
 
 
-# Function purpose: to read JSON input from NodeJS and convert to python dict
+# Function purpose: to read JSON from stdin (NodeJS) and convert to python dict
 # Parse stdin using json.loads, and handle any invalid JSONs
 def _read_stdin_json():
     raw_output = sys.stdin.read()
+    # Check if the input is empty
     if not raw_output.strip():
         raise ValueError("no input received")
+    # Try to parse the input as JSON
     try:
         return json.loads(raw_output)
     except json.JSONDecodeError as e:
@@ -40,14 +50,15 @@ def _read_stdin_json():
 
 
 # Function purpose: create a safe id for an article for audio output path naming
-# if there is an article id use it, otherwise, use last part of url, otherwise use title or a fallback index
+# if there is an article id from NewsAPI use it otherwise use last part of url, otherwise use title or a fallback index
 def _safe_article_id(article, fallback_index):
+    # use article id if it exists
     if article.get("id"):
         return str(article["id"])
 
+    # use last part of url if it exists, limit to 60 char
     url = article.get("url")
     if url:
-        # use last part of url, limit to 60 char
         tail = url.rstrip("/").split("/")[-1]
         if tail:
             return tail[:60]
@@ -55,13 +66,13 @@ def _safe_article_id(article, fallback_index):
     # if all fails, use title
     title = article.get("title")
 
-    # if title is missing, use a fallback
+    # if title is missing, use a fallback id
     if not title:
         title = "article_" + str(fallback_index)
 
     safe = ""
 
-    # replace non alphanumeric characters with underscores
+    # replace all non alphanumeric characters with underscores
     for ch in title:
         if ch.isalnum():
             safe += ch
@@ -71,7 +82,7 @@ def _safe_article_id(article, fallback_index):
     # remove trailing underscores
     safe = safe.strip("_")
 
-    # limit length to 60
+    # limit id length to 60
     if len(safe) > 60:
         safe = safe[:60]
 
@@ -102,8 +113,8 @@ def run_pipeline(payload):
     if OPENROUTER_API_KEY is None:
         raise ValueError("open router api key missing")
 
-    # Start of Recommender System
-    print("Starting Recommmender system")
+    # Recommender System
+    # print("Starting Recommmender system")
     user_prefs = [user_pref]
 
     _, X_items, X_users = fit_tfidf(articles, user_prefs)
@@ -111,8 +122,11 @@ def run_pipeline(payload):
 
     top_articles = [articles[i] for i in ranked_ids]
 
-    # Starting LLM conversation generator
-    print("Starting LLM conversation generator")
+    print("ranked_ids:", ranked_ids, file=sys.stderr)
+    print("len(articles):", len(articles), file=sys.stderr)
+
+    # LLM conversation generator
+    # print("Starting LLM conversation generator")
     conversations = []
     # Generate a conversation for each article
     for i, article in zip(ranked_ids, top_articles):
@@ -123,8 +137,8 @@ def run_pipeline(payload):
         )
         conversations.append((i, article, convo))
 
-    # Starting text to speech generation
-    print("Starting text to speech generation")
+    # TTS Podcast audio generation
+    # print("Starting text to speech generation")
     results = []
     # Generate audio for each article
     for rank, (idx, article, convo) in enumerate(conversations, start=1):
@@ -146,7 +160,7 @@ def run_pipeline(payload):
                 "url": article.get("url"),
                 "image_url": article.get("urlToImage"),
                 "audio_path": str(Path(final_audio_path).resolve()),
-                "conversation": convo,  # keep it if you want to show transcript on podcast page
+                "conversation": convo,
             }
         )
 
@@ -177,16 +191,14 @@ def run_pipeline(payload):
 # Implements a command line wrapper that reads stdin, processes using run_pipeline and returns using stdout Json.
 def main():
     try:
+        # Read JSON payload from stdin sent by NodeJS
         payload = _read_stdin_json()
-        out = run_pipeline(payload)
-        sys.stdout.write(json.dumps(out, ensure_ascii=False))
+        # Run the pipeline with the payload
+        run_pipeline(payload)
         sys.exit(0)
     except Exception as e:
-        err = {
-            "ok": False,
-            "error": str(e),
-        }
-        sys.stdout.write(json.dumps(err, ensure_ascii=False))
+        emit({"type": "error", "error": str(e)})
+        print(traceback.format_exc(), file=sys.stderr)
         sys.exit(1)
 
 

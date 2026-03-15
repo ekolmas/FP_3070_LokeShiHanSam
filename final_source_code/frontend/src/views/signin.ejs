@@ -1,6 +1,7 @@
 <%- include("layout", { title, body: ` <h1>Sign In</h1>
     ${error ? `<p class="error">${error}</p>` : ""}
 
+    <!-- Form that calls /auth/signin to authenticate the user -->
     <form method="POST" action="/auth/signin">
         <label>Username</label>
         <input name="username" type="text" required />

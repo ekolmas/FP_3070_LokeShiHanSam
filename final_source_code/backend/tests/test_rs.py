@@ -4,6 +4,7 @@ from pipeline.RS import build_item_text, build_user_text, fit_tfidf, recommend_t
 
 
 # Test purpose: Ensure that build item text concatenates properly.
+# passed successfully
 def test_build_item_text_contains_expected_tokens():
     article = {
         "source": {"id": "bbc", "name": "BBC"},
@@ -22,6 +23,7 @@ def test_build_item_text_contains_expected_tokens():
 
 
 # Test purpose: ensure that build user text properly flattens user's preference into a single text string
+# passed successfully
 def test_build_user_text_contains_preferences():
     pref = {
         "preferences": {"sources": ["bbc"], "topics": ["tech"], "style": ["breaking"]}
@@ -34,6 +36,7 @@ def test_build_user_text_contains_preferences():
 
 
 # Test purpose: Ensure that fit_tfidf returns correct tf_idf matrice shape
+# passed successfully
 def test_fit_tfidf_returns_expected_shapes():
     articles = [
         {
@@ -79,6 +82,7 @@ def test_fit_tfidf_returns_expected_shapes():
 
 
 # Purpose: Ensure that tfidf recommender ranks the most relevant article highest for the user profile
+# passed successfully
 def test_recommend_tfidf_ranks_best_item_first():
     articles = [
         {
@@ -126,6 +130,7 @@ def test_recommend_tfidf_ranks_best_item_first():
 
 
 # Test purpose: ensure that an invalid user indices raises an index error
+# passed successfully
 def test_recommend_tfidf_invalid_user_id_raises():
     articles = [
         {"source": {"id": "bbc"}, "title": "x", "description": "", "content": ""},

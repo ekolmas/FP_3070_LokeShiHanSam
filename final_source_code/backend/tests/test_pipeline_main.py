@@ -11,6 +11,7 @@ load_dotenv(dotenv_path=env_path, override=False)
 
 
 # Test purpose: to build a newsapi like article for testing
+# passed successfully
 def _one_dummy_article():
     return {
         "source": {"id": "unit-test", "name": "Unit Test News"},
@@ -25,6 +26,7 @@ def _one_dummy_article():
 
 
 # Test purpose: to build a user preference profile that matches the dummy article
+# passed successfully
 def _basic_user_pref():
     return {
         "preferences": {
@@ -36,6 +38,7 @@ def _basic_user_pref():
 
 
 # Test purpose: ensure that full pipeline can process article and generate an audio podcast
+# passed successfully
 def test_pipeline_one_article_integration_real():
     payload = {
         "articles": [_one_dummy_article()],

@@ -38,13 +38,16 @@ def build_user_text(user_pref):
 # Function purpose: Fit tfidf feature space and embed articles and user preference in it
 # Fits TF-IDF vectorizer on the item texts. Projects items and users into the same vector space
 def fit_tfidf(articles, user_prefs):
+    # Build text representations for items and users
     item_texts = [build_item_text(a) for a in articles]
     user_texts = [build_user_text(p) for p in user_prefs]
 
+    # Fit TF-IDF vectorizer on item texts and transform both items and users into the same vector space
     tfidf = TfidfVectorizer(
         max_features=20000, ngram_range=(1, 2), stop_words="english"
     )
 
+    # Fit on items and transform both items and users
     X_items = tfidf.fit_transform(item_texts)
     X_users = tfidf.transform(user_texts)
 
@@ -54,14 +57,12 @@ def fit_tfidf(articles, user_prefs):
 # Function purpose: Rank and recommend articles for articles that is most relevant to a user's preference
 # Computes cosine similarity between user and item tf idf vectors and returns the top N items
 def recommend_tfidf(user_id: int, X_users, X_items, N=1):
+    # Compute cosine similarity between the user vector and all item vectors
     sims = linear_kernel(X_users[user_id], X_items).ravel()
 
-    if N <= 0:
-        return []
-
-    # Sort all items by score descending
+    # Sort all items by score descending (highest first)
     ranked = np.argsort(-sims)
 
-    # Remove filtered items (-inf) and return up to N
+    # Filter out items with non finite similarity scores and return the top N ranked item indices
     ranked = [int(i) for i in ranked if np.isfinite(sims[i])]
     return ranked[: min(N, len(ranked))]

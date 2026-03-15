@@ -1,9 +1,11 @@
 <%- include("layout", { title, body: ` <h1>Preferences</h1>
-    <p>Logged in as: ${username || ""}</p>
+    <p>Welcome ${username}</p>
 
+    <!-- Form that calls POST /preferences to save preferences -->
     <form method="POST" action="/preferences">
         <h2>Topics</h2>
         <div class="options">
+            <!-- Topics set in NodeJS "preferences.js" -->
             ${TOPIC_OPTIONS.map(t => `
             <label style="display:block; margin: 6px 0;">
                 <input type="checkbox" name="topics" value="${t}" ${prefs.topics?.includes(t) ? "checked" : "" } />
@@ -14,6 +16,7 @@
 
         <h2>Sources</h2>
         <div class="options">
+            <!-- Sources set in NodeJS "preferences.js" -->
             ${SOURCE_OPTIONS.map(s => `
             <label style="display:block; margin: 6px 0;">
                 <input type="checkbox" name="sources" value="${s}" ${prefs.sources?.includes(s) ? "checked" : "" } />
@@ -24,6 +27,7 @@
 
         <h2>Style</h2>
         <div class="options">
+            <!-- Styles set in NodeJS "preferences.js" -->
             ${STYLE_OPTIONS.map(st => `
             <label style="display:block; margin: 6px 0;">
                 <input type="checkbox" name="style" value="${st}" ${prefs.style?.includes(st) ? "checked" : "" } />

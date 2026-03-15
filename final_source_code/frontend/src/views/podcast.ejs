@@ -1,5 +1,5 @@
 <%- include("layout", { title, body: ` <h1>Podcast</h1>
-    <p>Signed in as: ${username}</p>
+    <p>Welcome ${username}</p>
 
     <p>
         <a href="/preferences">Edit preferences</a> |
@@ -8,30 +8,26 @@
 
     <hr />
 
-    <h2>Preloaded (Latest)</h2>
+    <h2>Latest Podcast</h2>
 
     ${
     (!preloaded || preloaded.length === 0)
-    ? `<p>No preloaded podcasts yet.</p>`
+    ? `<p>No preloaded podcasts found</p>`
     : preloaded.map(p => `
     <div style="border:1px solid #ddd; padding:16px; border-radius:12px; margin-bottom:12px;">
-        <h3>${p.podcast_title || "Untitled Podcast"}</h3>
-        <small>${p.created_at || ""}</small>
+        <h3>${p.podcast_title}</h3>
+        <small>${p.created_at}</small>
 
-        ${p.image_url ? `
         <div style="margin-top:10px;">
-            <img src="${p.image_url}" style="width:200px;border-radius:12px;" />
+            <img src="${p.image_url}" style="width:400px;border-radius:12px;" />
         </div>
-        ` : ""}
 
-        ${p.audio_path ? `
         <div style="margin-top:10px;">
             <audio controls style="width:100%;" src="${p.audio_path}"></audio>
         </div>
-        ` : `<p>(No audio_path in this record)</p>`}
 
         <div style="margin-top:6px; font-size:14px; opacity:0.8;">
-            Generation time: ${(p.generation_time ? (p.generation_time/1000).toFixed(1) : "—")}s
+            Generation time: ${(p.generation_time / 1000).toFixed(1)} seconds
         </div>
     </div>
     `).join("")
@@ -39,9 +35,10 @@
 
     <hr />
 
-    <h2>Generate New Podcast</h2>
 
     <div style="border:1px solid #ddd; padding:16px; border-radius:12px;">
+        <h2>Generate New AI Podcast</h2>
+
         <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px;">
             <div id="spinner" style="
         width:18px; height:18px;
@@ -54,7 +51,7 @@
             <div>
                 <div id="genStatus" style="font-weight:600;">Idle</div>
                 <div style="font-size:14px; opacity:0.8;">
-                    Elapsed: <span id="elapsed">0.0</span>s
+                    Timer: <span id="elapsed">0.0</span>s
                 </div>
             </div>
 
@@ -81,41 +78,54 @@
             var elapsedEl = document.getElementById('elapsed');
             var liveList = document.getElementById('liveList');
 
+            // Initialise timer variables
             var timer = null;
-            var t0 = 0;
-            var es = null;
+            //timerTracker used to track start time, eventSource is the EventSource instance
+            var timerTracker = 0;
+            var eventSource = null;
 
+            // Function purpose: starts a timer that updates the elapsed time every 100ms
             function startTimer() {
-                t0 = performance.now();
+                timerTracker = performance.now();
                 timer = setInterval(function () {
-                    var secs = (performance.now() - t0) / 1000;
+                    var secs = (performance.now() - timerTracker) / 1000;
                     elapsedEl.textContent = secs.toFixed(1);
                 }, 100);
             }
 
+            // Function purpose: stops the timer and resets the timer variable
             function stopTimer() {
                 if (timer) clearInterval(timer);
                 timer = null;
             }
 
+            // Function purpose: updates the UI when generating starts or stops
             function setGeneratingUI(isGenerating) {
                 spinner.style.display = isGenerating ? 'inline-block' : 'none';
                 startBtn.disabled = isGenerating;
             }
 
+            // Event listener for the start button click event which starts the podcast generation process
             startBtn.addEventListener('click', async function () {
+                // Reset UI
                 liveList.innerHTML = '';
                 elapsedEl.textContent = '0.0';
                 genStatus.textContent = 'Starting...';
+
+                // set UI to generating state
                 setGeneratingUI(true);
+                // Start timer
                 startTimer();
 
-                if (es) { es.close(); es = null; }
+                // if existing event source, close before starting new one
+                if (eventSource) { eventSource.close(); eventSource = null; }
 
                 try {
+                    // Make POST request to start podcast generation and get job ID
                     var resp = await fetch('/podcast/start', { method: 'POST' });
                     var data = await resp.json();
 
+                    // if response not ok, show error and reset UI
                     if (!data.ok) {
                         genStatus.textContent = 'Error: ' + (data.error || 'Unknown error');
                         setGeneratingUI(false);
@@ -123,21 +133,24 @@
                         return;
                     }
 
+                    // Update status to generating
                     genStatus.textContent = 'Generating...';
 
-                    es = new EventSource('/podcast/events/' + data.jobId);
+                    // new EventSource that listens to server events for job ID
+                    eventSource = new EventSource('/podcast/events/' + data.jobId);
 
-                    es.onmessage = function (ev) {
+                    // when message received, parse and update UI
+                    eventSource.onmessage = function (ev) {
                         var msg = JSON.parse(ev.data);
 
+                        // if podcast item is ready
                         if (msg.type === 'item_ready') {
-                            var item = msg.item || {};
-                            var src = item.audio_url || item.audio_path || '';
+                            var item = msg.item;
+                            var src = item.audio_url || item.audio_path;
 
                             var li = document.createElement('li');
                             li.style.marginBottom = '10px';
 
-                            // IMPORTANT: no backticks here
                             li.innerHTML =
                                 '<div style="font-weight:600;">' + (item.title || 'Untitled') + '</div>' +
                                 '<audio controls style="width:100%;" src="' + src + '"></audio>';
@@ -145,32 +158,36 @@
                             liveList.appendChild(li);
                         }
 
+                        // if generation done, update status, reset UI and close event source connection
                         if (msg.type === 'done') {
                             genStatus.textContent = 'Done!';
                             setGeneratingUI(false);
                             stopTimer();
-                            es.close();
-                            es = null;
+                            eventSource.close();
+                            eventSource = null;
                         }
 
+                        // if error, show error message, reset UI and close event source connection
                         if (msg.type === 'error') {
                             genStatus.textContent = 'Error: ' + (msg.error || 'Unknown error');
                             setGeneratingUI(false);
                             stopTimer();
-                            es.close();
-                            es = null;
+                            eventSource.close();
+                            eventSource = null;
                         }
                     };
 
-                    es.onerror = function () {
+                    // if error event received, show error message, reset UI and close event source connection
+                    eventSource.onerror = function () {
                         genStatus.textContent = 'Connection lost.';
                         setGeneratingUI(false);
                         stopTimer();
-                        if (es) es.close();
-                        es = null;
+                        if (eventSource) eventSource.close();
+                        eventSource = null;
                     };
 
                 } catch (e) {
+                    // catch any other errors and reset UI
                     genStatus.textContent = 'Error: ' + (e.message || String(e));
                     setGeneratingUI(false);
                     stopTimer();
