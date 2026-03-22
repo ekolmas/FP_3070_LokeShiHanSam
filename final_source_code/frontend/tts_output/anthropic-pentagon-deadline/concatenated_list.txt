@@ -1,0 +1,6 @@
+file 'C:/Users/Sam/Desktop/FP_3070_LokeShiHanSam/final_source_code/frontend/tts_output/anthropic-pentagon-deadline/segment_000_host1.wav'
+file 'C:/Users/Sam/Desktop/FP_3070_LokeShiHanSam/final_source_code/frontend/tts_output/anthropic-pentagon-deadline/segment_001_host2.wav'
+file 'C:/Users/Sam/Desktop/FP_3070_LokeShiHanSam/final_source_code/frontend/tts_output/anthropic-pentagon-deadline/segment_002_host1.wav'
+file 'C:/Users/Sam/Desktop/FP_3070_LokeShiHanSam/final_source_code/frontend/tts_output/anthropic-pentagon-deadline/segment_003_host2.wav'
+file 'C:/Users/Sam/Desktop/FP_3070_LokeShiHanSam/final_source_code/frontend/tts_output/anthropic-pentagon-deadline/segment_004_host1.wav'
+file 'C:/Users/Sam/Desktop/FP_3070_LokeShiHanSam/final_source_code/frontend/tts_output/anthropic-pentagon-deadline/segment_005_host2.wav'

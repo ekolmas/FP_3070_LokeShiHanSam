@@ -13,7 +13,6 @@ function requireAuth(req, res, next) {
 const TOPIC_OPTIONS = [
   "technology",
   "business",
-  "world",
   "sports",
   "science",
   "health",

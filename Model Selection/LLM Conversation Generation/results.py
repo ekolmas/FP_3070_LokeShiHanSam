@@ -1,8 +1,8 @@
 zai = [
     [
         "Hey everyone and welcome to Tech Talk Today! I'm Alex.",
-        "And I'm Jamie. Today we're diving into something really exciting in the world of artificial intelligence - AI agents that can actually play games with us like human friends.",
-        "That's right! We're talking about Altera, a new startup that just raised $9 million in seed funding to develop exactly these kinds of AI companions.",
+        "And I'm Jamie. Today we're diving into something really exciting in the world of artificial intelligence",
+        "That's right! We're talking about Altera, a new startup that just raised $9 million",
         "Nine million is quite an investment! Who are their backers?",
         "The round was co-led by First Spark Ventures, which is Eric Schmidt's deep-tech fund, and Patron, a seed-stage fund co-founded by Riot Games alumni. They had previously raised $2 million in pre-seed funding back in January.",
         "Impressive backers indeed. So what exactly is Altera building?",

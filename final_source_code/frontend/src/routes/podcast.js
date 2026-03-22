@@ -9,6 +9,7 @@ const router = express.Router();
 
 import EventEmitter from "events";
 import { randomUUID } from "crypto";
+import { URLSearchParams } from "url";
 
 //job id to track state of each generation, allowing front end to display progress
 const jobs = new Map();
@@ -22,19 +23,25 @@ function requireAuth(req, res, next) {
 }
 
 // Function purpose: fetch 30 news articles from NewsAPI for AI podcast generation pipeline
-async function fetch30Articles() {
+async function fetch30Articles(userPreference) {
+  console.log(userPreference)
   // get API key from env
   const apiKey = process.env.NEWSAPI_KEY;
   if (!apiKey) throw new Error("Missing NEWSAPI_KEY in .env");
 
+  const topics = userPreference?.topics;
+  const sources = userPreference?.sources;
+
+  const params = new URLSearchParams({ pageSize: "30" })
+
+  // Use sources and topics
+  params.set("sources", sources.join(","));
+  params.set("language", "en");
+  params.set("q", buildTopicQuery(topics));
+
   // fetch top 30 tech news articles
-  const url =
-    `https://newsapi.org/v2/top-headlines?` +
-    new URLSearchParams({
-      language: "en",
-      pageSize: "30",
-      category: "technology",
-    });
+  const url = `https://newsapi.org/v2/everything?${params.toString()}`;
+  console.log("NewsAPI call", url);
 
   // call NewsAPI with API key in header
   const resp = await fetch(url, {
@@ -49,7 +56,15 @@ async function fetch30Articles() {
 
   // return array of articles
   const data = await resp.json();
+  console.log(data)
   return data.articles;
+}
+
+// Function purpose: to build a query with the user preference topic
+function buildTopicQuery(topics = []) {
+  return topics
+    .map(t => t.includes(" ") ? `"${t}"` : t)
+    .join(" OR ");
 }
 
 //Function purpose: start python pipeline and return jobId to track progress
@@ -171,7 +186,7 @@ function startPythonPipelineJob({ db, articles, user_pref }) {
 
     if (code !== 0 && !job.done && !job.error) {
       job.error = `Python exited with code ${code}`;
-      emitter.emit("msg", { type: "error", error: errText });
+      emitter.emit("msg", { type: "error", error: job.error });
       emitter.emit("end");
     }
   });
@@ -228,7 +243,7 @@ router.post("/podcast/start", requireAuth, async (req, res) => {
     }
 
     // fetch 30 news articles from NewsAPI
-    const articles = await fetch30Articles();
+    const articles = await fetch30Articles(prefDoc.preferences);
 
     // start python pipeline and get jobID to track progress
     const jobId = startPythonPipelineJob({
